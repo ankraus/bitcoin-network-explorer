@@ -1,11 +1,13 @@
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 use crate::{
+    handlers::{handle_inv, handle_ping, handle_verack},
     messages::{BtcMessage, ByteMessage, VersionMessagePayload},
     node_acquisition::BtcNode,
 };
 
 mod commands;
+mod handlers;
 mod hashes;
 mod messages;
 mod network;
@@ -17,7 +19,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Hello, Bitcoin Network!");
 
     //println!("{:X?}", msg.into_bytes());
-    let node_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(199, 168, 75, 24)), 8333);
+    let node_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(185, 26, 99, 171)), 8333);
     let node = BtcNode {
         address: node_address,
     };
@@ -34,29 +36,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Sending: {:X?}", msg.as_bytes());
     transmitter.send_message(msg.as_bytes()).await?;
 
-    loop {
-        let msg = match receiver.read_message().await {
-            Ok(message) => {
-                println!("Received Message: {:?}", message);
-                message
-            }
-            Err(err) => {
-                println!("Error reading Message: {:?}", err);
-                continue;
-            }
-        };
+    // loop {
+    //     let msg = match receiver.read_message().await {
+    //         Ok(message) => {
+    //             println!("Received Message: {:?}", message);
+    //             message
+    //         }
+    //         Err(err) => {
+    //             println!("Error reading Message: {:?}", err);
+    //             continue;
+    //         }
+    //     };
 
-        if msg.command == commands::BtcCommand::Version {
-            break;
-        }
-    }
-
-    let verack_message: Vec<u8> = vec![
-        0xF9, 0xBE, 0xB4, 0xD9, 0x76, 0x65, 0x72, 0x61, 0x63, 0x6B, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x5D, 0xF6, 0xE0, 0xE2,
-    ];
-    transmitter.send_message(verack_message).await?;
-    println!("Sent Verack");
+    //     if msg.command == commands::BtcCommand::Verack {
+    //         break;
+    //     }
+    // }
 
     loop {
         let msg = match receiver.read_message().await {
@@ -70,16 +65,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        if msg.command == commands::BtcCommand::Ping {
-            println!("Received Ping");
-            let new_msg = BtcMessage::from_fields(
-                commands::BtcCommand::Pong,
-                msg.payload_size,
-                msg.checksum,
-                msg.payload,
-            );
-            transmitter.send_message(new_msg.as_bytes()).await?;
+        if !msg.is_valid() {
+            println!("Error reading Message: Checksum does not match");
+            continue;
         }
+
+        match msg.command {
+            commands::BtcCommand::Version => continue,
+            commands::BtcCommand::Verack => handle_verack(&transmitter).await,
+            commands::BtcCommand::Ping => handle_ping(&transmitter, msg).await,
+            commands::BtcCommand::Pong => continue,
+            commands::BtcCommand::Inv => handle_inv(&transmitter, msg).await,
+            commands::BtcCommand::GetData => continue,
+            commands::BtcCommand::Unknown => {
+                println!("Unknown command: {:?}", msg.command);
+                Ok(())
+            }
+        }
+        .expect("Error handling message!");
     }
 
     // node_acquisition::acquire_nodes().await?;

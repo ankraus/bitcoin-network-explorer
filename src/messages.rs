@@ -1,6 +1,7 @@
 use crate::commands;
 use crate::commands::BtcCommand;
 use crate::hashes;
+use crate::hashes::get_checksum;
 use crate::util;
 
 use std::net::Ipv6Addr;
@@ -20,6 +21,24 @@ pub struct BtcMessage {
     pub payload_size: usize,
     pub checksum: [u8; 4],
     pub payload: Vec<u8>,
+}
+
+#[derive(Debug)]
+pub struct VersionMessagePayload {
+    // PAYLOAD
+    protocol_version: u32,
+    services: u64,
+    time: u64,
+    remote_services: u64,
+    remote_ip: Ipv6Addr,
+    remote_port: u16,
+    local_services: u64,
+    local_ip: Ipv6Addr,
+    local_port: u16,
+    nonce: u64,
+    user_agent: String, // currently no user agent will ever be set
+    last_block: u32,
+    relay_flag: bool,
 }
 
 impl BtcMessage {
@@ -47,6 +66,12 @@ impl BtcMessage {
             payload: payload,
         }
     }
+
+    pub fn is_valid(&self) -> bool {
+        let calculated_checksum = get_checksum(self.payload.clone());
+        let received_checksum = self.checksum;
+        calculated_checksum == received_checksum
+    }
 }
 
 impl ByteMessage for BtcMessage {
@@ -67,24 +92,6 @@ impl ByteMessage for BtcMessage {
     }
 }
 
-#[derive(Debug)]
-pub struct VersionMessagePayload {
-    // PAYLOAD
-    protocol_version: u32,
-    services: u64,
-    time: u64,
-    remote_services: u64,
-    remote_ip: Ipv6Addr,
-    remote_port: u16,
-    local_services: u64,
-    local_ip: Ipv6Addr,
-    local_port: u16,
-    nonce: u64,
-    user_agent: String, // currently no user agent will ever be set
-    last_block: u32,
-    relay_flag: bool,
-}
-
 impl VersionMessagePayload {
     pub fn default() -> VersionMessagePayload {
         VersionMessagePayload {
@@ -100,7 +107,7 @@ impl VersionMessagePayload {
             nonce: 0,
             user_agent: "test".to_string(),
             last_block: 0,
-            relay_flag: false,
+            relay_flag: true,
         }
     }
 }

@@ -2,7 +2,7 @@ macro_rules! match_command {
   ($bytes:expr, { $($pattern:expr => $result:expr),* $(,)? }) => {
     match $bytes {
         $(ref b if *b == &$pattern => Ok($result),)*
-        _ => Err(format!("Unknown command: {}", String::from_utf8_lossy($bytes).trim_matches(char::from(0))).into()),
+        _ => {println!("Unknown command: {}", String::from_utf8_lossy($bytes).trim_matches(char::from(0))); Ok(BtcCommand::Unknown)},
     }
 };
 }
@@ -22,6 +22,9 @@ pub(crate) enum BtcCommand {
     Verack,
     Ping,
     Pong,
+    Inv,
+    GetData,
+    Unknown,
 }
 
 pub(crate) const VERSION: ByteCommand = ByteCommand([
@@ -40,12 +43,24 @@ pub(crate) const PONG: ByteCommand = ByteCommand([
     0x70, 0x6f, 0x6e, 0x67, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 ]);
 
+pub(crate) const INV: ByteCommand = ByteCommand([
+    0x69, 0x6e, 0x76, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+]);
+
+pub(crate) const GETDATA: ByteCommand = ByteCommand([
+    0x67, 0x65, 0x74, 0x64, 0x61, 0x74, 0x61, 0x00, 0x00, 0x00, 0x00, 0x00,
+]);
+
+pub(crate) const UNKOWN: ByteCommand = ByteCommand([0x0; 12]);
+
 pub(crate) fn from_bytes(bytes: [u8; 12]) -> Result<BtcCommand, Box<dyn std::error::Error>> {
     match_command!(&bytes, {
         VERSION => BtcCommand::Version,
         VERACK => BtcCommand::Verack,
         PING => BtcCommand::Ping,
         PONG => BtcCommand::Pong,
+        INV => BtcCommand::Inv,
+        GETDATA => BtcCommand::GetData,
     })
 }
 
@@ -55,6 +70,9 @@ pub(crate) fn from_enum(command: &BtcCommand) -> ByteCommand {
         BtcCommand::Verack => ByteCommand::new(VERACK),
         BtcCommand::Ping => ByteCommand::new(PING),
         BtcCommand::Pong => ByteCommand::new(PONG),
+        BtcCommand::Inv => ByteCommand::new(INV),
+        BtcCommand::Unknown => ByteCommand::new(UNKOWN),
+        BtcCommand::GetData => ByteCommand::new(GETDATA),
     }
 }
 

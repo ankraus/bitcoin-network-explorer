@@ -13,3 +13,4 @@ pub fn get_checksum(message: Vec<u8>) -> [u8; 4] {
     println!("Result: {:X?}", result);
     result
 }
+

@@ -32,7 +32,7 @@ impl Receiver<'_> {
         let checksum = self.read_checksum().await?;
         println!("Read checksum: {:?}", checksum);
         let payload = self.read_payload(payload_size).await?;
-        println!("Read payload: {:?}", payload);
+        println!("Read payload: {:X?}", payload);
         Ok(BtcMessage::from_fields(
             command,
             payload_size,
@@ -44,7 +44,7 @@ impl Receiver<'_> {
     async fn seek_magic_number(&self) -> Result<(), Box<dyn std::error::Error>> {
         let mut last_four_bytes: VecDeque<u8> = VecDeque::new();
         loop {
-            self.rx.readable().await?;
+            // self.rx.readable().await?;
             let mut buf: [u8; 1] = [0; 1];
             match self.rx.try_read(&mut buf) {
                 Ok(n) => {
@@ -53,7 +53,7 @@ impl Receiver<'_> {
                     }
                     last_four_bytes.push_back(buf[0]);
                     if buf != [0x0] {
-                        println!("{:?}", last_four_bytes);
+                        println!("{:X?}", last_four_bytes);
                     }
                 }
                 Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
@@ -126,23 +126,27 @@ impl Receiver<'_> {
         &self,
         payload_size: usize,
     ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-        let payload_size_usize: usize =
-            usize::try_from(payload_size).expect("Could not convert payload size to usize");
-        let mut buf = vec![0u8; payload_size_usize];
-        match self.rx.try_read(&mut buf) {
-            Ok(n) => {
-                if n != payload_size_usize {
-                    return Err(format!(
-                        "Received fewer bytes than expected in payload. Expected {}, got {}",
-                        payload_size_usize, n
-                    )
-                    .into());
+        loop {
+            let payload_size_usize: usize =
+                usize::try_from(payload_size).expect("Could not convert payload size to usize");
+            let mut buf = vec![0u8; payload_size_usize];
+            match self.rx.try_read(&mut buf) {
+                Ok(n) => {
+                    if n != payload_size_usize {
+                        return Err(format!(
+                            "Received fewer bytes than expected in payload. Expected {}, got {}",
+                            payload_size_usize, n
+                        )
+                        .into());
+                    }
+                    return Ok(buf);
                 }
-                return Ok(buf);
-            }
-            Err(e) => {
-                println!("Error: {}", e);
-                return Err(e.into());
+                Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
+                    continue;
+                }
+                Err(e) => {
+                    return Err(e.into());
+                }
             }
         }
     }
