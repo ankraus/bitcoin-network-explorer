@@ -26,12 +26,12 @@ impl fmt::Display for BlockMessagePayload {
 
         write!(
           f,
-          "\n--- Received Block ---\nTimestamp: {}\nHash: {}\nExpected Hash: {}\nHash matches: {}\nVersion: {}\nPrevious Block: {}\nDifficulty: {}\nNonce: {}\nNumber of transactions: {}\nTotal value: {}\nMost valuable transaction: {}\nTransactions > 1 BTC: \n{}\n",
+          "\n--- Received Block ---\nTimestamp: {}\nActual Hash: {}\nExpected Hash: {}\nHash matches: {}\nVersion: {}\nPrevious Block: {}\nDifficulty: {}\nNonce: {}\nNumber of transactions: {}\nTotal value: {}\nMost valuable transaction: {}\nTransactions > 1 BTC: \n{}\n",
           datetime_str,
           format_hex(&calculated_hash),
           format_hex(&self.expected_hash),
           self.expected_hash == calculated_hash,
-          format_hex(&self.version.to_be_bytes()),
+          &self.version,
           format_hex(&self.prev_block),
           self.difficulty,
           self.nonce,

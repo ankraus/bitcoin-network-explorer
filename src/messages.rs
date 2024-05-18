@@ -315,7 +315,6 @@ impl BlockMessagePayload {
         bytes.extend_from_slice(&self.timestamp.to_le_bytes());
         bytes.extend_from_slice(&self.difficulty_bits.to_le_bytes());
         bytes.extend_from_slice(&self.nonce.to_le_bytes());
-        bytes.extend_from_slice(&[0u8; 48]);
 
         get_double_sha256(bytes)
     }
