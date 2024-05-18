@@ -33,7 +33,7 @@ pub async fn handle_verack(
 pub async fn handle_inv(
     transmitter: &Transmitter<'_>,
     msg: BtcMessage,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<Option<[u8; 32]>, Box<dyn std::error::Error>> {
     let mut parsed_message = match InvMessagePayload::from_bytes(msg.payload) {
         Ok(m) => m,
         Err(e) => return Err(e),
@@ -41,18 +41,22 @@ pub async fn handle_inv(
 
     parsed_message.inv_vectors.retain(|x| x.entry_type == 2);
     if parsed_message.inv_vectors.is_empty() {
-        return Ok(());
+        return Ok(None);
     }
     parsed_message.count = VarInt::from_usize(parsed_message.inv_vectors.len());
     let get_data_msg = BtcMessage::new(BtcCommand::GetData, parsed_message.as_bytes());
-    transmitter.send_message(get_data_msg.as_bytes()).await
+    match transmitter.send_message(get_data_msg.as_bytes()).await {
+        Ok(_) => Ok(Some(parsed_message.inv_vectors[0].hash)),
+        Err(e) => Err(e),
+    }
 }
 
 pub async fn handle_block(
     msg: BtcMessage,
+    expected_block_hash: Option<[u8; 32]>,
     ctx: &Sender<BlockMessagePayload>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let block_message = match BlockMessagePayload::from_bytes(msg.payload) {
+    let block_message = match BlockMessagePayload::from_bytes(msg.payload, expected_block_hash) {
         Ok(m) => m,
         Err(e) => return Err(e),
     };

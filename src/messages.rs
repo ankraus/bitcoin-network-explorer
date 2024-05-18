@@ -1,7 +1,9 @@
+use num_traits::ToBytes;
+
 use crate::commands;
 use crate::commands::BtcCommand;
-use crate::hashes;
 use crate::hashes::get_checksum;
+use crate::hashes::{self, get_double_sha256};
 use crate::util::{self, bits_to_difficulty, byte_array_from_vec, take_byte_array, VarInt};
 
 use std::mem;
@@ -56,10 +58,12 @@ pub struct InventoryVector {
 
 #[derive(Debug)]
 pub struct BlockMessagePayload {
+    pub expected_hash: [u8; 32],
     pub version: i32,
     pub prev_block: [u8; 32],
     pub merkle_root: [u8; 32],
     pub timestamp: u32,
+    pub difficulty_bits: u32,
     pub difficulty: f64,
     pub nonce: u32,
     pub txn_count: VarInt,
@@ -260,7 +264,10 @@ impl InventoryVector {
 }
 
 impl BlockMessagePayload {
-    pub fn from_bytes(bytes: Vec<u8>) -> Result<BlockMessagePayload, Box<dyn std::error::Error>> {
+    pub fn from_bytes(
+        bytes: Vec<u8>,
+        expected_hash: Option<[u8; 32]>,
+    ) -> Result<BlockMessagePayload, Box<dyn std::error::Error>> {
         if bytes.len() < 81 {
             return Err("Could not parse block message".into());
         }
@@ -286,15 +293,33 @@ impl BlockMessagePayload {
         }
 
         Ok(BlockMessagePayload {
+            expected_hash: match expected_hash {
+                Some(hash) => hash,
+                None => [0u8; 32],
+            },
             version: i32::from_le_bytes(version_bytes),
             prev_block: prev_block_bytes,
             merkle_root: merkle_root_bytes,
             timestamp: u32::from_le_bytes(timestamp_bytes),
+            difficulty_bits: u32::from_le_bytes(difficulty_bytes),
             difficulty: bits_to_difficulty(u32::from_le_bytes(difficulty_bytes)),
             nonce: u32::from_le_bytes(nonce_bytes),
             txn_count,
             txns: txns,
         })
+    }
+
+    pub fn calculate_hash(&self) -> [u8; 32] {
+        let mut bytes: Vec<u8> = Vec::new();
+        bytes.extend_from_slice(&self.version.to_le_bytes());
+        bytes.extend_from_slice(&self.prev_block);
+        bytes.extend_from_slice(&self.merkle_root);
+        bytes.extend_from_slice(&self.timestamp.to_le_bytes());
+        bytes.extend_from_slice(&self.difficulty_bits.to_le_bytes());
+        bytes.extend_from_slice(&self.nonce.to_le_bytes());
+        bytes.extend_from_slice(&[0u8; 48]);
+
+        get_double_sha256(bytes)
     }
 }
 

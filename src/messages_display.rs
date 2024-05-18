@@ -22,10 +22,14 @@ impl fmt::Display for BlockMessagePayload {
             .map(|(index, tx)| (index, tx.get_total_value()))
             .max_by_key(|&(_, value)| value);
 
+        let calculated_hash = self.calculate_hash();
+
         write!(
           f,
-          "\n--- Received Block ---\nTimestamp: {}\nVersion: {}\nPrevious Block: {}\nDifficulty: {}\nNonce: {}\nNumber of transactions: {}\nTotal value: {}\nMost valuable transaction: {}\nTransactions > 1 BTC: \n{}\n",
+          "\n--- Received Block ---\nTimestamp: {}\nHash: {}\nHash matches: {}\nVersion: {}\nPrevious Block: {}\nDifficulty: {}\nNonce: {}\nNumber of transactions: {}\nTotal value: {}\nMost valuable transaction: {}\nTransactions > 1 BTC: \n{}\n",
           datetime_str,
+          format_hex(&calculated_hash),
+          self.expected_hash == calculated_hash,
           format_hex(&self.version.to_be_bytes()),
           format_hex(&self.prev_block),
           self.difficulty,

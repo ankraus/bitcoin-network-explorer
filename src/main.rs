@@ -58,6 +58,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         transmitter.send_message(msg.as_bytes()).await.unwrap();
 
+        let mut expected_block_hash: Option<[u8; 32]> = None;
+
         loop {
             let msg = match timeout(Duration::new(60, 0), receiver.read_message()).await {
                 Ok(m) => match m {
@@ -91,10 +93,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         is_verified = true;
                         mtx.send(Event::connection_verified()).await.unwrap();
                     }
-                    handle_inv(&transmitter, msg).await
+                    match handle_inv(&transmitter, msg).await {
+                        Ok(hash) => {
+                            expected_block_hash = hash;
+                            continue;
+                        }
+                        Err(e) => continue,
+                    }
                 }
                 commands::BtcCommand::GetData => continue,
-                commands::BtcCommand::Block => handle_block(msg, &ctx).await,
+                commands::BtcCommand::Block => handle_block(msg, expected_block_hash, &ctx).await,
                 commands::BtcCommand::Unknown => continue,
             }
             .expect("Error handling message!");
