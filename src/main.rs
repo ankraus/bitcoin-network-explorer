@@ -23,9 +23,8 @@ mod util;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("\n=== Bitcoin Network Explorer ===\n");
-
-    //println!("{:X?}", msg.into_bytes());
+    println!("\n=== Bitcoin Network Explorer ===");
+    println!("Press ctrl + c to exit\n");
 
     let (ctx, mut crx) = mpsc::channel::<BlockMessagePayload>(100);
     let (mtx, mut mrx) = mpsc::channel::<Event>(100);
@@ -105,6 +104,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let block_msg_handle = tokio::spawn(async move {
         while let Some(i) = crx.recv().await {
             println!("{}", i);
+            println!("\nAwaiting next block message...");
         }
     });
 
