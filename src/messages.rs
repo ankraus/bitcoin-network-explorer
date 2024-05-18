@@ -1,16 +1,9 @@
-use chrono::{DateTime, NaiveDateTime};
-use num_traits::ToBytes;
-
 use crate::commands;
 use crate::commands::BtcCommand;
 use crate::hashes;
 use crate::hashes::get_checksum;
-use crate::util::{
-    self, bits_to_difficulty, byte_array_from_vec, format_hex, format_value, take_byte_array,
-    VarInt,
-};
+use crate::util::{self, bits_to_difficulty, byte_array_from_vec, take_byte_array, VarInt};
 
-use std::fmt::{self, Display};
 use std::mem;
 use std::net::Ipv6Addr;
 use std::str::FromStr;
@@ -44,8 +37,8 @@ pub struct VersionMessagePayload {
     local_ip: Ipv6Addr,
     local_port: u16,
     nonce: u64,
-    user_agent: String, // currently no user agent will ever be set
-    last_block: u32,
+    _user_agent: String, // currently no user agent will ever be set
+    _last_block: u32,
     relay_flag: bool,
 }
 
@@ -182,8 +175,8 @@ impl VersionMessagePayload {
             local_ip: Ipv6Addr::from_str("::ffff:7f00:1").unwrap(),
             local_port: 8333,
             nonce: 0,
-            user_agent: "test".to_string(),
-            last_block: 0,
+            _user_agent: "test".to_string(),
+            _last_block: 0,
             relay_flag: true,
         }
     }
@@ -436,8 +429,6 @@ impl TXOut {
     }
 }
 
-
-
 impl TXWitness {
     pub fn from_bytes(bytes: Vec<u8>) -> (TXWitness, usize) {
         let mut offset: usize = 0;
@@ -447,6 +438,7 @@ impl TXWitness {
         let mut data: Vec<WitnessData> = Vec::new();
         for _ in 0..count.as_usize() {
             let (witness_data, size) = WitnessData::from_bytes(bytes[offset..].to_vec());
+            data.push(witness_data);
             offset += size;
         }
 

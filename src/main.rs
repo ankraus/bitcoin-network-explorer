@@ -1,8 +1,6 @@
-use core::time;
 use std::{
-    io,
     net::{IpAddr, Ipv4Addr, SocketAddr},
-    time::{Duration, SystemTime},
+    time::Duration,
 };
 
 use tokio::{net::TcpStream, sync::mpsc, time::timeout};
@@ -44,7 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .unwrap();
                 stream
             }
-            Err(e) => {
+            Err(_) => {
                 mtx.send(Event::connection_lost()).await.unwrap();
                 return;
             }

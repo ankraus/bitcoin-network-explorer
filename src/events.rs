@@ -3,8 +3,6 @@ pub enum EventType {
     ConnectionEstablished,
     ConnectionVerified,
     ConnectionLost,
-    NotFound,
-    Timeout,
 }
 
 pub struct Event {
@@ -31,13 +29,6 @@ impl Event {
         Event {
             event_type: EventType::ConnectionLost,
             event_message: "Connection lost".into(),
-        }
-    }
-
-    pub fn not_found() -> Event {
-        Event {
-            event_type: EventType::NotFound,
-            event_message: "No nodes found".into(),
         }
     }
 }

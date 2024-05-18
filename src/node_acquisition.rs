@@ -1,12 +1,11 @@
 extern crate domain;
 use domain::base::Dname;
-use domain::resolv::{Resolver, StubResolver};
-use serde::Deserialize;
-use std::io;
-use std::net::{IpAddr, SocketAddr};
-use tokio::net::TcpStream;
+use domain::resolv::StubResolver;
 
-pub(crate) async fn acquire_nodes() -> Result<(), Box<dyn std::error::Error>> {
+use std::io;
+use std::net::SocketAddr;
+
+pub(crate) async fn _acquire_nodes() -> Result<(), Box<dyn std::error::Error>> {
     let resp = reqwest::get("https://bitnodes.io/api/v1/nodes/leaderboard/?limit=10").await?;
     let resp_headers = resp.headers().clone();
     let resp_content = resp.json::<serde_json::Value>().await?;
@@ -30,7 +29,7 @@ pub(crate) async fn acquire_nodes() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-pub(crate) async fn do_dns() -> Result<Vec<SocketAddr>, std::io::Error> {
+pub(crate) async fn _do_dns() -> Result<Vec<SocketAddr>, std::io::Error> {
     let resolver = StubResolver::new();
     let addr = match resolver
         .lookup_host(&Dname::<Vec<u8>>::vec_from_str("seed.bitnodes.io").unwrap())
@@ -48,17 +47,4 @@ pub(crate) async fn do_dns() -> Result<Vec<SocketAddr>, std::io::Error> {
     }
 
     Ok(addr.port_iter(8333).collect())
-    // for a in addr.port_iter(8333) {
-    //     let mut addr_string = a.to_string();
-    //     let port_separator_index = addr_string.rfind(':').unwrap();
-
-    //     addr_string.replace_range(port_separator_index..port_separator_index + 1, "-");
-    //     addr_string = addr_string.replace(['[', ']'], "");
-    //     println!(
-    //         "{}: {:?}, {}",
-    //         if a.is_ipv4() { "A" } else { "AAAA" },
-    //         a,
-    //         addr_string
-    //     );
-    // }
 }

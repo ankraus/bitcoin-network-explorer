@@ -1,9 +1,8 @@
-use domain::dep::octseq::parse;
 use tokio::sync::mpsc::Sender;
 
 use crate::{
     commands::{self, BtcCommand},
-    messages::{BlockMessagePayload, BtcMessage, ByteMessage, InvMessagePayload, InventoryVector},
+    messages::{BlockMessagePayload, BtcMessage, ByteMessage, InvMessagePayload},
     network::Transmitter,
     util::VarInt,
 };

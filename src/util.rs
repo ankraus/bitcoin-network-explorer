@@ -145,14 +145,6 @@ pub fn format_value(value: i64) -> String {
     format!("{:.8} BTC", (value as f64) / 100000000.0)
 }
 
-// from https://stackoverflow.com/questions/69444896/how-to-pad-an-array-with-zeros
-pub fn pad_zeroes<const A: usize, const B: usize>(arr: [u8; A]) -> [u8; B] {
-    assert!(B >= A); //just for a nicer error message, adding #[track_caller] to the function may also be desirable
-    let mut b = [0; B];
-    b[..A].copy_from_slice(&arr);
-    b
-}
-
 // from https://gist.github.com/jweinst1/0f0f2e9e31e487469e5367d42ad29253
 pub fn get_sys_time_in_secs() -> u64 {
     match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
@@ -160,33 +152,3 @@ pub fn get_sys_time_in_secs() -> u64 {
         Err(_) => panic!("SystemTime before UNIX EPOCH!"),
     }
 }
-
-// pub fn extract_var_int(bytes: &[u8]) -> Result<(u32, usize), Box<dyn std::error::Error>> {
-//     let mut array = [0u8; 4];
-//     let (extracted_bytes, offset) = match bytes[0] {
-//         0xFF => return Err("Unimplemented".into()),
-//         0xFE => return Err("Unimplemented".into()),
-//         // {
-//         //     array.copy_from_slice(&bytes[1..=4]);
-//         //     (array, 5)
-//         // }
-//         0xFD => return Err("Unimplemented".into()),
-//         // {
-//         //     array[..2].copy_from_slice(&bytes[1..=2]);
-//         //     (array, 3)
-//         // }
-//         _ => {
-//             array[0] = bytes[0];
-//             (array, 1)
-//         }
-//     };
-//     Ok((u32::from_le_bytes(extracted_bytes), offset))
-// }
-
-// pub fn encode_var_int(int: u32) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-//     if int < 0xFD {
-//         return Ok(vec![int.to_le_bytes()[0]]);
-//     } else {
-//         return Err("Unimplemented".into());
-//     }
-// }

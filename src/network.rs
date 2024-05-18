@@ -25,17 +25,11 @@ impl Receiver<'_> {
 
     pub async fn read_message(&mut self) -> Result<BtcMessage, Box<dyn std::error::Error>> {
         self.rx.readable().await?;
-        // println!("Waiting for message");
         self.seek_magic_number().await?;
-        // println!("Found magic number");
         let command = self.read_command().await?;
-        // println!("Read command: {:?}", command);
         let payload_size = self.read_payload_size().await?;
-        // println!("Read payload size: {:?}", payload_size);
         let checksum = self.read_checksum().await?;
-        // println!("Read checksum: {:?}", checksum);
         let payload = self.read_payload(payload_size).await?;
-        // println!("Read payload: {:X?}", payload);
         Ok(BtcMessage::from_fields(
             command,
             payload_size,
@@ -50,7 +44,7 @@ impl Receiver<'_> {
             self.rx.readable().await?;
             let mut buf: [u8; 1] = [0; 1];
             match self.rx.try_read(&mut buf) {
-                Ok(n) => {
+                Ok(_) => {
                     if last_four_bytes.len() == 4 {
                         last_four_bytes.pop_front();
                     }

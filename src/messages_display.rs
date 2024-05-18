@@ -61,11 +61,6 @@ impl fmt::Display for TXMessage {
 
 impl fmt::Display for TXIn {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let script_str = self
-            .script
-            .iter()
-            .map(|b| format!("{:02x}", b))
-            .collect::<String>();
         write!(
             f,
             "TXIn {{ prev_output: {}, script_length: {}, sequence: {} }}",
@@ -91,11 +86,6 @@ impl fmt::Display for OutPoint {
 
 impl fmt::Display for TXOut {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let pk_script_str = self
-            .pk_script
-            .iter()
-            .map(|b| format!("{:02x}", b))
-            .collect::<String>();
         write!(
             f,
             "TXOut {{ value: {}, pk_script_length: {} }}",
