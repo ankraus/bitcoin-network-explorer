@@ -1,7 +1,7 @@
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 use crate::{
-    handlers::{handle_inv, handle_ping, handle_verack},
+    handlers::{handle_block, handle_inv, handle_ping, handle_verack},
     messages::{BtcMessage, ByteMessage, VersionMessagePayload},
     node_acquisition::BtcNode,
 };
@@ -28,7 +28,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (rx, tx) = stream.split();
 
     let transmitter = network::Transmitter::new(tx);
-    let receiver = network::Receiver::new(rx);
+    let mut receiver = network::Receiver::new(rx);
 
     let payload: VersionMessagePayload = messages::VersionMessagePayload::default();
     let msg: BtcMessage = BtcMessage::new(commands::BtcCommand::Version, payload.as_bytes());
@@ -56,7 +56,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         let msg = match receiver.read_message().await {
             Ok(message) => {
-                println!("Received Message: {:?}", message);
+                println!("Received Message: {:?}", message.command);
                 message
             }
             Err(err) => {
@@ -77,6 +77,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             commands::BtcCommand::Pong => continue,
             commands::BtcCommand::Inv => handle_inv(&transmitter, msg).await,
             commands::BtcCommand::GetData => continue,
+            commands::BtcCommand::Block => handle_block(msg).await,
             commands::BtcCommand::Unknown => {
                 println!("Unknown command: {:?}", msg.command);
                 Ok(())

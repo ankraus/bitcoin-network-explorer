@@ -24,6 +24,7 @@ pub(crate) enum BtcCommand {
     Pong,
     Inv,
     GetData,
+    Block,
     Unknown,
 }
 
@@ -51,6 +52,10 @@ pub(crate) const GETDATA: ByteCommand = ByteCommand([
     0x67, 0x65, 0x74, 0x64, 0x61, 0x74, 0x61, 0x00, 0x00, 0x00, 0x00, 0x00,
 ]);
 
+pub(crate) const BLOCK: ByteCommand = ByteCommand([
+    0x62, 0x6c, 0x6f, 0x63, 0x6b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+]);
+
 pub(crate) const UNKOWN: ByteCommand = ByteCommand([0x0; 12]);
 
 pub(crate) fn from_bytes(bytes: [u8; 12]) -> Result<BtcCommand, Box<dyn std::error::Error>> {
@@ -61,6 +66,7 @@ pub(crate) fn from_bytes(bytes: [u8; 12]) -> Result<BtcCommand, Box<dyn std::err
         PONG => BtcCommand::Pong,
         INV => BtcCommand::Inv,
         GETDATA => BtcCommand::GetData,
+        BLOCK => BtcCommand::Block,
     })
 }
 
@@ -73,6 +79,7 @@ pub(crate) fn from_enum(command: &BtcCommand) -> ByteCommand {
         BtcCommand::Inv => ByteCommand::new(INV),
         BtcCommand::Unknown => ByteCommand::new(UNKOWN),
         BtcCommand::GetData => ByteCommand::new(GETDATA),
+        BtcCommand::Block => ByteCommand::new(BLOCK),
     }
 }
 

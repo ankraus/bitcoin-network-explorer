@@ -3,7 +3,10 @@ use std::io::ErrorKind;
 
 use crate::commands;
 use crate::messages::BtcMessage;
-use tokio::net::tcp::{ReadHalf, WriteHalf};
+use tokio::{
+    io::AsyncReadExt,
+    net::tcp::{ReadHalf, WriteHalf},
+};
 
 #[derive(Debug)]
 pub(crate) struct Receiver<'a> {
@@ -20,7 +23,7 @@ impl Receiver<'_> {
         Receiver { rx }
     }
 
-    pub async fn read_message(&self) -> Result<BtcMessage, Box<dyn std::error::Error>> {
+    pub async fn read_message(&mut self) -> Result<BtcMessage, Box<dyn std::error::Error>> {
         self.rx.readable().await?;
         println!("Waiting for message");
         self.seek_magic_number().await?;
@@ -32,7 +35,7 @@ impl Receiver<'_> {
         let checksum = self.read_checksum().await?;
         println!("Read checksum: {:?}", checksum);
         let payload = self.read_payload(payload_size).await?;
-        println!("Read payload: {:X?}", payload);
+        // println!("Read payload: {:X?}", payload);
         Ok(BtcMessage::from_fields(
             command,
             payload_size,
@@ -52,9 +55,6 @@ impl Receiver<'_> {
                         last_four_bytes.pop_front();
                     }
                     last_four_bytes.push_back(buf[0]);
-                    if buf != [0x0] {
-                        println!("{:X?}", last_four_bytes);
-                    }
                 }
                 Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
                     continue;
@@ -69,9 +69,9 @@ impl Receiver<'_> {
         }
     }
 
-    async fn read_command(&self) -> Result<commands::BtcCommand, Box<dyn std::error::Error>> {
+    async fn read_command(&mut self) -> Result<commands::BtcCommand, Box<dyn std::error::Error>> {
         let mut buf: [u8; 12] = [0; 12];
-        match self.rx.try_read(&mut buf) {
+        match self.rx.read_exact(&mut buf).await {
             Ok(n) => {
                 if n != 12 {
                     return Err("Received not enough bytes to read command".into());
@@ -85,9 +85,9 @@ impl Receiver<'_> {
         }
     }
 
-    async fn read_payload_size(&self) -> Result<usize, Box<dyn std::error::Error>> {
+    async fn read_payload_size(&mut self) -> Result<usize, Box<dyn std::error::Error>> {
         let mut buf: [u8; 4] = [0; 4];
-        match self.rx.try_read(&mut buf) {
+        match self.rx.read_exact(&mut buf).await {
             Ok(n) => {
                 if n != 4 {
                     return Err("Received not enough bytes to read payload size".into());
@@ -106,9 +106,9 @@ impl Receiver<'_> {
         }
     }
 
-    async fn read_checksum(&self) -> Result<[u8; 4], Box<dyn std::error::Error>> {
+    async fn read_checksum(&mut self) -> Result<[u8; 4], Box<dyn std::error::Error>> {
         let mut buf: [u8; 4] = [0; 4];
-        match self.rx.try_read(&mut buf) {
+        match self.rx.read_exact(&mut buf).await {
             Ok(n) => {
                 if n != 4 {
                     return Err("Received not enough bytes to read payload size".into());
@@ -123,30 +123,16 @@ impl Receiver<'_> {
     }
 
     async fn read_payload(
-        &self,
+        &mut self,
         payload_size: usize,
     ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         loop {
             let payload_size_usize: usize =
                 usize::try_from(payload_size).expect("Could not convert payload size to usize");
             let mut buf = vec![0u8; payload_size_usize];
-            match self.rx.try_read(&mut buf) {
-                Ok(n) => {
-                    if n != payload_size_usize {
-                        return Err(format!(
-                            "Received fewer bytes than expected in payload. Expected {}, got {}",
-                            payload_size_usize, n
-                        )
-                        .into());
-                    }
-                    return Ok(buf);
-                }
-                Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
-                    continue;
-                }
-                Err(e) => {
-                    return Err(e.into());
-                }
+            match self.rx.read_exact(&mut buf).await {
+                Ok(_) => return Ok(buf),
+                Err(e) => return Err(e.into()),
             }
         }
     }

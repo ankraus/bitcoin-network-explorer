@@ -2,7 +2,7 @@ use crate::commands;
 use crate::commands::BtcCommand;
 use crate::hashes;
 use crate::hashes::get_checksum;
-use crate::util;
+use crate::util::{self, bits_to_difficulty, byte_array_from_vec, take_byte_array, VarInt};
 
 use std::net::Ipv6Addr;
 use std::str::FromStr;
@@ -39,6 +39,75 @@ pub struct VersionMessagePayload {
     user_agent: String, // currently no user agent will ever be set
     last_block: u32,
     relay_flag: bool,
+}
+
+#[derive(Debug)]
+pub struct InvMessagePayload {
+    pub count: VarInt,
+    pub inv_vectors: Vec<InventoryVector>,
+}
+
+#[derive(Debug)]
+pub struct InventoryVector {
+    pub entry_type: u32,
+    pub hash: [u8; 32],
+}
+
+#[derive(Debug)]
+pub struct BlockMessagePayload {
+    pub version: i32,
+    pub prev_block: [u8; 32],
+    pub merkle_root: [u8; 32],
+    pub timestamp: u32,
+    pub difficulty: f64,
+    pub nonce: u32,
+    pub txn_count: VarInt,
+    pub txns: Vec<TXMessage>,
+}
+
+#[derive(Debug)]
+pub struct TXMessage {
+    pub version: u32,
+    pub witness_flag: bool,
+    pub tx_in_count: VarInt,
+    pub tx_in: Vec<TXIn>,
+    pub tx_out_count: VarInt,
+    pub tx_out: Vec<TXOut>,
+    pub tx_witness: Option<Vec<TXWitness>>,
+    pub locktime: u32,
+}
+
+#[derive(Debug)]
+pub struct TXIn {
+    pub prev_output: OutPoint,
+    pub script_length: VarInt,
+    pub script: Vec<u8>,
+    pub sequence: u32,
+}
+
+#[derive(Debug)]
+pub struct OutPoint {
+    pub hash: [u8; 32],
+    pub index: u32,
+}
+
+#[derive(Debug)]
+pub struct TXOut {
+    pub value: i64,
+    pub pk_script_length: VarInt,
+    pub pk_script: Vec<u8>,
+}
+
+#[derive(Debug)]
+pub struct TXWitness {
+    pub count: VarInt,
+    pub data: Vec<WitnessData>,
+}
+
+#[derive(Debug)]
+pub struct WitnessData {
+    pub length: VarInt,
+    pub data: Vec<u8>,
 }
 
 impl BtcMessage {
@@ -144,3 +213,96 @@ impl ByteMessage for VersionMessagePayload {
         self.as_bytes().len().try_into().unwrap()
     }
 }
+
+impl InvMessagePayload {
+    pub fn from_bytes(bytes: Vec<u8>) -> Result<InvMessagePayload, Box<dyn std::error::Error>> {
+        let count = VarInt::from_bytes(bytes.clone());
+        let mut inv_vectors: Vec<InventoryVector> = Vec::new();
+        for n in 0..count.value {
+            let x = n as usize;
+            let start = (x * 36) + count.offset;
+            let mut object_type_bytes = [0u8; 4];
+            object_type_bytes.copy_from_slice(&bytes[start..start + 4]);
+
+            let mut hash_bytes = [0u8; 32];
+            hash_bytes.copy_from_slice(&bytes[start + 4..start + 36]);
+            let inv_vector = InventoryVector {
+                entry_type: u32::from_le_bytes(object_type_bytes),
+                hash: hash_bytes,
+            };
+            inv_vectors.push(inv_vector);
+        }
+        Ok(InvMessagePayload {
+            count: count,
+            inv_vectors,
+        })
+    }
+
+    pub fn as_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        let count = self.count.as_bytes();
+        bytes.extend_from_slice(&count);
+        for v in &self.inv_vectors {
+            bytes.extend_from_slice(&v.as_bytes());
+        }
+        bytes
+    }
+}
+
+impl InventoryVector {
+    pub fn as_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&self.entry_type.to_le_bytes());
+        bytes.extend_from_slice(&self.hash);
+        bytes
+    }
+}
+
+impl BlockMessagePayload {
+    pub fn from_bytes(bytes: Vec<u8>) -> Result<BlockMessagePayload, Box<dyn std::error::Error>> {
+        if bytes.len() < 81 {
+            return Err("Could not parse block message".into());
+        }
+
+        let mut bytes_iter = bytes.iter().cloned();
+
+        let version_bytes = take_byte_array(bytes_iter.by_ref());
+        let prev_block_bytes = take_byte_array(bytes_iter.by_ref());
+        let merkle_root_bytes = take_byte_array(bytes_iter.by_ref());
+        let timestamp_bytes = take_byte_array(bytes_iter.by_ref());
+        let difficulty_bytes = take_byte_array(bytes_iter.by_ref());
+        let nonce_bytes = take_byte_array(bytes_iter.by_ref());
+        let txn_count = VarInt::from_bytes(bytes.iter().cloned().skip(80).collect());
+
+        Ok(BlockMessagePayload {
+            version: i32::from_le_bytes(version_bytes),
+            prev_block: prev_block_bytes,
+            merkle_root: merkle_root_bytes,
+            timestamp: u32::from_le_bytes(timestamp_bytes),
+            difficulty: bits_to_difficulty(u32::from_le_bytes(difficulty_bytes)),
+            nonce: u32::from_le_bytes(nonce_bytes),
+            txn_count,
+            txns: Vec::new(),
+        })
+    }
+}
+
+// impl TXIn {
+//     pub fn from_bytes(bytes: Vec<u8>) -> TXIn {}
+// }
+
+// impl OutPoint {
+//     pub fn from_bytes(bytes: Vec<u8>) -> OutPoint {}
+// }
+
+// impl TXOut {
+//     pub fn from_bytes(bytes: Vec<u8>) -> TXOut {}
+// }
+
+// impl TXWitness {
+//     pub fn from_bytes(bytes: Vec<u8>) -> TXWitness {}
+// }
+
+// impl WitnessData {
+//     pub fn from_bytes(bytes: Vec<u8>) -> WitnessData {}
+// }
