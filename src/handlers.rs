@@ -1,4 +1,5 @@
 use domain::dep::octseq::parse;
+use tokio::sync::mpsc::Sender;
 
 use crate::{
     commands::{self, BtcCommand},
@@ -38,7 +39,7 @@ pub async fn handle_inv(
         Ok(m) => m,
         Err(e) => return Err(e),
     };
-    println!("New inv message: {:?}", parsed_message);
+    // println!("New inv message: {:?}", parsed_message);
     let new_vectors = InventoryVector {
         entry_type: 2,
         hash: [
@@ -48,13 +49,13 @@ pub async fn handle_inv(
         ],
     };
 
-    println!("Inv Vector Payload: {:X?}", new_vectors.as_bytes());
+    // println!("Inv Vector Payload: {:X?}", new_vectors.as_bytes());
     let new_payload = InvMessagePayload {
         count: VarInt::new(1),
         inv_vectors: vec![new_vectors],
     };
     let new_msg = BtcMessage::new(BtcCommand::GetData, new_payload.as_bytes());
-    println!("Sent getdata message: {:X?}", new_msg.as_bytes());
+    // println!("Sent getdata message: {:X?}", new_msg.as_bytes());
     transmitter.send_message(new_msg.as_bytes()).await
     // parsed_message.inv_vectors.retain(|x| x.entry_type == 2);
     // if parsed_message.inv_vectors.is_empty() {
@@ -67,13 +68,17 @@ pub async fn handle_inv(
     // transmitter.send_message(get_data_msg.as_bytes()).await
 }
 
-pub async fn handle_block(msg: BtcMessage) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn handle_block(
+    msg: BtcMessage,
+    ctx: &Sender<BlockMessagePayload>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let block_message = match BlockMessagePayload::from_bytes(msg.payload) {
         Ok(m) => m,
         Err(e) => return Err(e),
     };
 
-    println!("Received Block Message {:?}", block_message);
-
-    Ok(())
+    match ctx.send(block_message).await {
+        Ok(_) => Ok(()),
+        Err(e) => Err(e.into()),
+    }
 }

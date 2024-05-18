@@ -4,6 +4,7 @@ extern crate num_traits;
 use num_bigint::BigUint;
 use num_traits::FromPrimitive;
 use num_traits::ToPrimitive;
+use std::fmt;
 use std::time::SystemTime;
 
 #[derive(Debug)]
@@ -94,6 +95,12 @@ impl VarInt {
     }
 }
 
+impl fmt::Display for VarInt {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.value)
+    }
+}
+
 pub fn byte_array_from_vec<const L: usize>(bytes: Vec<u8>) -> [u8; L] {
     assert!(bytes.len() >= L);
     let mut array = [0x0; L];
@@ -124,6 +131,18 @@ pub fn bits_to_difficulty(bits: u32) -> f64 {
     let difficulty = difficulty_1_target.to_f64().unwrap() / target.to_f64().unwrap();
 
     difficulty
+}
+
+pub fn format_hex(bytes: &[u8]) -> String {
+    bytes
+        .iter()
+        .map(|b| format!("{:02x}", b))
+        .collect::<Vec<String>>()
+        .join("")
+}
+
+pub fn format_value(value: i64) -> String {
+    format!("{:.8} BTC", (value as f64) / 100000000.0)
 }
 
 // from https://stackoverflow.com/questions/69444896/how-to-pad-an-array-with-zeros
