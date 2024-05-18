@@ -1,54 +1,81 @@
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use core::time;
+use std::{
+    io,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    time::{Duration, SystemTime},
+};
 
-use tokio::sync::mpsc;
+use tokio::{net::TcpStream, sync::mpsc, time::timeout};
 
 use crate::{
+    events::Event,
     handlers::{handle_block, handle_inv, handle_ping, handle_verack},
     messages::{BlockMessagePayload, BtcMessage, ByteMessage, VersionMessagePayload},
-    node_acquisition::BtcNode,
 };
 
 mod commands;
+mod events;
 mod handlers;
 mod hashes;
 mod messages;
+mod messages_display;
 mod network;
 mod node_acquisition;
 mod util;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("Hello, Bitcoin Network!");
+    println!("\n=== Bitcoin Network Explorer ===\n");
 
     //println!("{:X?}", msg.into_bytes());
 
     let (ctx, mut crx) = mpsc::channel::<BlockMessagePayload>(100);
+    let (mtx, mut mrx) = mpsc::channel::<Event>(100);
 
-    tokio::spawn(async move {
+    let main_handle = tokio::spawn(async move {
         let node_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(185, 26, 99, 171)), 8333);
-        let node = BtcNode {
-            address: node_address,
+
+        let mut stream = match TcpStream::connect(node_address).await {
+            Ok(stream) => {
+                mtx.send(Event::connection_established(
+                    stream.peer_addr().unwrap().to_string(),
+                ))
+                .await
+                .unwrap();
+                stream
+            }
+            Err(e) => {
+                mtx.send(Event::connection_lost()).await.unwrap();
+                return;
+            }
         };
-        let mut stream = node_acquisition::connect_to_node(node).await.unwrap();
         let (rx, tx) = stream.split();
 
         let transmitter = network::Transmitter::new(tx);
         let mut receiver = network::Receiver::new(rx);
 
+        let mut is_verified = false;
+
         let payload: VersionMessagePayload = messages::VersionMessagePayload::default();
         let msg: BtcMessage = BtcMessage::new(commands::BtcCommand::Version, payload.as_bytes());
 
-        // println!("Sending: {:X?}", msg.as_bytes());
         transmitter.send_message(msg.as_bytes()).await.unwrap();
+
         loop {
-            let msg = match receiver.read_message().await {
-                Ok(message) => {
-                    // println!("Received Message: {:?}", message.command);
-                    message
-                }
-                Err(err) => {
-                    println!("Error reading Message: {:?}", err);
-                    continue;
+            let msg = match timeout(Duration::new(60, 0), receiver.read_message()).await {
+                Ok(m) => match m {
+                    Ok(message) => message,
+                    Err(err) => {
+                        println!("Error reading Message: {:?}", err);
+                        continue;
+                    }
+                },
+                Err(_) => {
+                    println!(
+                        "No messages received in the last {} seconds, exiting...",
+                        60
+                    );
+                    return;
                 }
             };
 
@@ -62,7 +89,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 commands::BtcCommand::Verack => handle_verack(&transmitter).await,
                 commands::BtcCommand::Ping => handle_ping(&transmitter, msg).await,
                 commands::BtcCommand::Pong => continue,
-                commands::BtcCommand::Inv => handle_inv(&transmitter, msg).await,
+                commands::BtcCommand::Inv => {
+                    if !is_verified {
+                        is_verified = true;
+                        mtx.send(Event::connection_verified()).await.unwrap();
+                    }
+                    handle_inv(&transmitter, msg).await
+                }
                 commands::BtcCommand::GetData => continue,
                 commands::BtcCommand::Block => handle_block(msg, &ctx).await,
                 commands::BtcCommand::Unknown => continue,
@@ -71,11 +104,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    while let Some(i) = crx.recv().await {
-        println!("got = {}", i);
+    let block_msg_handle = tokio::spawn(async move {
+        while let Some(i) = crx.recv().await {
+            println!("{}", i);
+        }
+    });
+
+    let event_handle = tokio::spawn(async move {
+        while let Some(i) = mrx.recv().await {
+            println!("{}", i.event_message);
+        }
+    });
+
+    loop {
+        if main_handle.is_finished() {
+            block_msg_handle.abort();
+            event_handle.abort();
+            break;
+        }
     }
 
-    // node_acquisition::acquire_nodes().await?;
-    // node_acquisition::do_dns().await;
     Ok(())
 }

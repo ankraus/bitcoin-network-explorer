@@ -2,7 +2,7 @@ macro_rules! match_command {
   ($bytes:expr, { $($pattern:expr => $result:expr),* $(,)? }) => {
     match $bytes {
         $(ref b if *b == &$pattern => Ok($result),)*
-        _ => {println!("Unknown command: {}", String::from_utf8_lossy($bytes).trim_matches(char::from(0))); Ok(BtcCommand::Unknown)},
+        _ => Ok(BtcCommand::Unknown),
     }
 };
 }

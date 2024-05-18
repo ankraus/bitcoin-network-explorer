@@ -305,42 +305,6 @@ impl BlockMessagePayload {
     }
 }
 
-impl fmt::Display for BlockMessagePayload {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let datetime = DateTime::from_timestamp(self.timestamp as i64, 0);
-        let datetime_str = datetime
-            .expect("Could not convert timestamp")
-            .format("%Y-%m-%d %X %Z")
-            .to_string();
-
-        write!(
-            f,
-            "BlockMessagePayload {{
-              Timestamp: {},
-              Version: {},
-              Previous Block: {},
-              Difficulty: {},
-              Nonce: {},
-              Number of transactions: {},
-              Total value: {},
-              Transactions: [{}]
-            }}",
-            datetime_str,
-            format_hex(&self.version.to_be_bytes()),
-            format_hex(&self.prev_block),
-            self.difficulty,
-            self.nonce,
-            self.txn_count,
-            format_value(self.txns.iter().map(|tx| tx.get_total_value()).sum::<i64>()),
-            self.txns
-                .iter()
-                .map(|tx| format!("{}", tx))
-                .collect::<Vec<String>>()
-                .join(",\n        ")
-        )
-    }
-}
-
 impl TXMessage {
     pub fn from_bytes(bytes: Vec<u8>) -> (TXMessage, usize) {
         let mut offset: usize = 0;
@@ -406,45 +370,6 @@ impl TXMessage {
     }
 }
 
-impl fmt::Display for TXMessage {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "TXMessage {{
-              value: {},
-              tx_in_count: {},
-              tx_out_count: {}
-            }}",
-            format_value(self.tx_out.iter().map(|tx_out| tx_out.value).sum::<i64>()),
-            // self.witness_flag,
-            self.tx_in_count,
-            // self.tx_in
-            //     .iter()
-            //     .map(|tx_in| format!("{}", tx_in))
-            //     .collect::<Vec<String>>()
-            //     .join(",\n        "),
-            self.tx_out_count,
-            // self.tx_out
-            //     .iter()
-            //     .map(|tx_out| format!("{}", tx_out))
-            //     .collect::<Vec<String>>()
-            //     .join(",\n        "),
-            // match &self.tx_witness {
-            //     Some(witnesses) => format!(
-            //         "[\n        {}\n    ]",
-            //         witnesses
-            //             .iter()
-            //             .map(|witness| format!("{}", witness))
-            //             .collect::<Vec<String>>()
-            //             .join(",\n        ")
-            //     ),
-            //     None => "None".to_string(),
-            // },
-            // self.locktime
-        )
-    }
-}
-
 impl TXIn {
     pub fn from_bytes(bytes: Vec<u8>) -> (TXIn, usize) {
         let mut offset: usize = 0;
@@ -473,21 +398,6 @@ impl TXIn {
     }
 }
 
-impl fmt::Display for TXIn {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let script_str = self
-            .script
-            .iter()
-            .map(|b| format!("{:02x}", b))
-            .collect::<String>();
-        write!(
-            f,
-            "TXIn {{ prev_output: {}, script_length: {}, sequence: {} }}",
-            self.prev_output, self.script_length, self.sequence
-        )
-    }
-}
-
 impl OutPoint {
     pub fn from_bytes(bytes: Vec<u8>) -> (OutPoint, usize) {
         let mut offset: usize = 0;
@@ -499,21 +409,6 @@ impl OutPoint {
         offset += mem::size_of::<u32>();
 
         (OutPoint { hash, index }, offset)
-    }
-}
-
-impl fmt::Display for OutPoint {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let hash_str = self
-            .hash
-            .iter()
-            .map(|b| format!("{:02x}", b))
-            .collect::<String>();
-        write!(
-            f,
-            "OutPoint {{ hash: {}, index: {} }}",
-            hash_str, self.index
-        )
     }
 }
 
@@ -541,20 +436,7 @@ impl TXOut {
     }
 }
 
-impl fmt::Display for TXOut {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let pk_script_str = self
-            .pk_script
-            .iter()
-            .map(|b| format!("{:02x}", b))
-            .collect::<String>();
-        write!(
-            f,
-            "TXOut {{ value: {}, pk_script_length: {} }}",
-            self.value, self.pk_script_length
-        )
-    }
-}
+
 
 impl TXWitness {
     pub fn from_bytes(bytes: Vec<u8>) -> (TXWitness, usize) {
@@ -572,22 +454,6 @@ impl TXWitness {
     }
 }
 
-impl fmt::Display for TXWitness {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let data_str = self
-            .data
-            .iter()
-            .map(|d| format!("{}", d))
-            .collect::<Vec<String>>()
-            .join(", ");
-        write!(
-            f,
-            "TXWitness {{ count: {}, data: [{}] }}",
-            self.count, data_str
-        )
-    }
-}
-
 impl WitnessData {
     pub fn from_bytes(bytes: Vec<u8>) -> (WitnessData, usize) {
         let mut offset: usize = 0;
@@ -597,20 +463,5 @@ impl WitnessData {
         let data: Vec<u8> = bytes[offset..offset + length.as_usize()].to_vec();
 
         (WitnessData { length, data }, offset)
-    }
-}
-
-impl fmt::Display for WitnessData {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let data_str = self
-            .data
-            .iter()
-            .map(|b| format!("{:02x}", b))
-            .collect::<String>();
-        write!(
-            f,
-            "WitnessData {{ length: {}, data: {} }}",
-            self.length, data_str
-        )
     }
 }
