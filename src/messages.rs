@@ -1,5 +1,3 @@
-use num_traits::ToBytes;
-
 use crate::commands;
 use crate::commands::BtcCommand;
 use crate::hashes::get_checksum;

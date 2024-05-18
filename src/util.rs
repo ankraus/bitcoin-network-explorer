@@ -1,10 +1,15 @@
 extern crate num_bigint;
 extern crate num_traits;
 
+use config::Config;
+use config::ConfigError;
+use config::File;
 use num_bigint::BigUint;
 use num_traits::FromPrimitive;
 use num_traits::ToPrimitive;
 use std::fmt;
+use std::net::IpAddr;
+use std::str::FromStr;
 use std::time::SystemTime;
 
 #[derive(Debug)]
@@ -150,5 +155,37 @@ pub fn get_sys_time_in_secs() -> u64 {
     match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
         Ok(n) => n.as_secs(),
         Err(_) => panic!("SystemTime before UNIX EPOCH!"),
+    }
+}
+
+pub fn load_settings() -> Result<Config, ConfigError> {
+    Config::builder()
+        .add_source(File::with_name("config"))
+        .build()
+}
+
+pub fn get_port_from_settings(conf: &Config) -> Result<u16, Box<dyn std::error::Error>> {
+    match conf.get_int("port") {
+        Ok(port) => Ok(u16::try_from(port).unwrap()),
+        Err(_) => Err("Could not parse Port from config.toml, exiting...".into()),
+    }
+}
+
+pub fn get_timeout_from_settings(conf: &Config) -> u64 {
+    match conf.get_int("timeout_seconds") {
+        Ok(timeout) => u64::try_from(timeout).unwrap(),
+        Err(_) => 60,
+    }
+}
+
+pub fn get_ip_from_settings(conf: &Config) -> Result<IpAddr, Box<dyn std::error::Error>> {
+    let ip_str: String = match conf.get_string("ip") {
+        Ok(ip) => ip,
+        Err(_) => return Err("Could not load IP from config.toml, exiting...".into()),
+    };
+
+    match IpAddr::from_str(&ip_str) {
+        Ok(ip) => Ok(ip),
+        Err(_) => Err("Could not parse IP from config.toml, exiting...".into()),
     }
 }

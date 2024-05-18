@@ -1,14 +1,13 @@
-use std::{
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    time::Duration,
-};
+use std::{net::SocketAddr, time::Duration};
 
 use tokio::{net::TcpStream, sync::mpsc, time::timeout};
+use util::get_ip_from_settings;
 
 use crate::{
     events::Event,
     handlers::{handle_block, handle_inv, handle_ping, handle_verack},
     messages::{BlockMessagePayload, BtcMessage, ByteMessage, VersionMessagePayload},
+    util::{get_port_from_settings, get_timeout_from_settings, load_settings},
 };
 
 mod commands;
@@ -26,11 +25,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n=== Bitcoin Network Explorer ===");
     println!("Press ctrl + c to exit\n");
 
+    let config = match load_settings() {
+        Ok(conf) => conf,
+        Err(_) => {
+            println!("Error: Could not read config.toml! Exiting...");
+            return Ok(());
+        }
+    };
+
+    let ip = match get_ip_from_settings(&config) {
+        Ok(ip) => ip,
+        Err(_) => {
+            println!("Error: Could not find IP in config.toml! Exiting...");
+            return Ok(());
+        }
+    };
+
+    let port = match get_port_from_settings(&config) {
+        Ok(port) => port,
+        Err(_) => {
+            println!("Error: Could not find IP in config.toml! Exiting...");
+            return Ok(());
+        }
+    };
+
+    let timeout_seconds = get_timeout_from_settings(&config);
+
     let (ctx, mut crx) = mpsc::channel::<BlockMessagePayload>(100);
     let (mtx, mut mrx) = mpsc::channel::<Event>(100);
 
     let main_handle = tokio::spawn(async move {
-        let node_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(185, 26, 99, 171)), 8333);
+        let node_address = SocketAddr::new(ip, port);
 
         let mut stream = match TcpStream::connect(node_address).await {
             Ok(stream) => {
@@ -61,22 +86,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut expected_block_hash: Option<[u8; 32]> = None;
 
         loop {
-            let msg = match timeout(Duration::new(60, 0), receiver.read_message()).await {
-                Ok(m) => match m {
-                    Ok(message) => message,
-                    Err(err) => {
-                        println!("Error reading Message: {:?}", err);
-                        continue;
+            let msg =
+                match timeout(Duration::new(timeout_seconds, 0), receiver.read_message()).await {
+                    Ok(m) => match m {
+                        Ok(message) => message,
+                        Err(err) => {
+                            println!("Error reading Message: {:?}", err);
+                            continue;
+                        }
+                    },
+                    Err(_) => {
+                        println!(
+                            "No messages received in the last {} seconds, exiting...",
+                            timeout_seconds
+                        );
+                        return;
                     }
-                },
-                Err(_) => {
-                    println!(
-                        "No messages received in the last {} seconds, exiting...",
-                        60
-                    );
-                    return;
-                }
-            };
+                };
 
             if !msg.is_valid() {
                 println!("Error reading Message: Checksum does not match");
@@ -98,7 +124,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             expected_block_hash = hash;
                             continue;
                         }
-                        Err(e) => continue,
+                        Err(_) => continue,
                     }
                 }
                 commands::BtcCommand::GetData => continue,
@@ -126,9 +152,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if main_handle.is_finished() {
             block_msg_handle.abort();
             event_handle.abort();
-            break;
+            return Ok(());
         }
     }
-
-    Ok(())
 }
