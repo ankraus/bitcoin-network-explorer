@@ -25,6 +25,10 @@ impl VarInt {
         Self::new(v)
     }
 
+    pub fn as_usize(&self) -> usize {
+        usize::try_from(self.value).unwrap()
+    }
+
     pub fn as_bytes(&self) -> Vec<u8> {
         let bytes = self.value.to_le_bytes();
         let mut array = [0u8; 9];

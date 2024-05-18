@@ -4,6 +4,7 @@ use crate::hashes;
 use crate::hashes::get_checksum;
 use crate::util::{self, bits_to_difficulty, byte_array_from_vec, take_byte_array, VarInt};
 
+use std::mem;
 use std::net::Ipv6Addr;
 use std::str::FromStr;
 
@@ -274,6 +275,16 @@ impl BlockMessagePayload {
         let nonce_bytes = take_byte_array(bytes_iter.by_ref());
         let txn_count = VarInt::from_bytes(bytes.iter().cloned().skip(80).collect());
 
+        let tx_bytes: Vec<u8> = bytes.iter().cloned().skip(80 + txn_count.offset).collect();
+
+        let mut tx_offset: usize = 0;
+        let mut txns: Vec<TXMessage> = Vec::new();
+        for _ in 0..txn_count.as_usize() {
+            let (tx, size) = TXMessage::from_bytes(tx_bytes[tx_offset..].to_vec());
+            txns.push(tx);
+            tx_offset += size;
+        }
+
         Ok(BlockMessagePayload {
             version: i32::from_le_bytes(version_bytes),
             prev_block: prev_block_bytes,
@@ -282,27 +293,162 @@ impl BlockMessagePayload {
             difficulty: bits_to_difficulty(u32::from_le_bytes(difficulty_bytes)),
             nonce: u32::from_le_bytes(nonce_bytes),
             txn_count,
-            txns: Vec::new(),
+            txns: txns,
         })
     }
 }
 
-// impl TXIn {
-//     pub fn from_bytes(bytes: Vec<u8>) -> TXIn {}
-// }
+impl TXMessage {
+    pub fn from_bytes(bytes: Vec<u8>) -> (TXMessage, usize) {
+        let mut offset: usize = 0;
+        let version: u32 = u32::from_le_bytes(byte_array_from_vec(
+            bytes.clone()[offset..offset + 4].to_vec(),
+        ));
+        offset += mem::size_of::<u32>();
 
-// impl OutPoint {
-//     pub fn from_bytes(bytes: Vec<u8>) -> OutPoint {}
-// }
+        let mut witness_flag = false;
+        if bytes[offset] == 0u8 {
+            witness_flag = true;
+            offset += 2;
+        }
+        let tx_in_count: VarInt = VarInt::from_bytes(bytes[offset..].to_vec());
+        offset += tx_in_count.offset;
 
-// impl TXOut {
-//     pub fn from_bytes(bytes: Vec<u8>) -> TXOut {}
-// }
+        let mut tx_in: Vec<TXIn> = Vec::new();
+        for _ in 0..tx_in_count.as_usize() {
+            let (new_tx_in, size) = TXIn::from_bytes(bytes[offset..].to_vec());
+            tx_in.push(new_tx_in);
+            offset += size;
+        }
 
-// impl TXWitness {
-//     pub fn from_bytes(bytes: Vec<u8>) -> TXWitness {}
-// }
+        let tx_out_count: VarInt = VarInt::from_bytes(bytes[offset..].to_vec());
+        offset += tx_out_count.offset;
+        let mut tx_out: Vec<TXOut> = Vec::new();
+        for _ in 0..tx_out_count.as_usize() {
+            let (new_tx_out, size) = TXOut::from_bytes(bytes[offset..].to_vec());
+            tx_out.push(new_tx_out);
+            offset += size;
+        }
 
-// impl WitnessData {
-//     pub fn from_bytes(bytes: Vec<u8>) -> WitnessData {}
-// }
+        let mut tx_witness: Option<Vec<TXWitness>> = None;
+        if witness_flag {
+            let mut witnesses: Vec<TXWitness> = Vec::new();
+            for _ in 0..tx_in_count.as_usize() {
+                let (witness, size) = TXWitness::from_bytes(bytes[offset..].to_vec());
+                offset += size;
+                witnesses.push(witness);
+            }
+            tx_witness = Some(witnesses);
+        }
+        let locktime: u32 =
+            u32::from_le_bytes(byte_array_from_vec(bytes[offset..offset + 4].to_vec()));
+        offset += mem::size_of::<u32>();
+        (
+            TXMessage {
+                version,
+                witness_flag,
+                tx_in_count,
+                tx_in,
+                tx_out_count,
+                tx_out,
+                tx_witness,
+                locktime,
+            },
+            offset,
+        )
+    }
+}
+
+impl TXIn {
+    pub fn from_bytes(bytes: Vec<u8>) -> (TXIn, usize) {
+        let mut offset: usize = 0;
+        let (prev_output, size) = OutPoint::from_bytes(bytes.clone());
+        offset += size;
+
+        let script_length: VarInt = VarInt::from_bytes(bytes[offset..].to_vec());
+        offset += script_length.offset;
+
+        let script: Vec<u8> = bytes[offset..offset + script_length.as_usize()].to_vec();
+        offset += script_length.as_usize();
+
+        let sequence: u32 =
+            u32::from_le_bytes(byte_array_from_vec(bytes[offset..offset + 4].to_vec()));
+        offset += mem::size_of::<u32>();
+
+        (
+            TXIn {
+                prev_output,
+                script_length,
+                script,
+                sequence,
+            },
+            offset,
+        )
+    }
+}
+
+impl OutPoint {
+    pub fn from_bytes(bytes: Vec<u8>) -> (OutPoint, usize) {
+        let mut offset: usize = 0;
+        let hash: [u8; 32] = byte_array_from_vec(bytes[offset..offset + 32].to_vec());
+        offset += mem::size_of::<[u8; 32]>();
+
+        let index: u32 =
+            u32::from_le_bytes(byte_array_from_vec(bytes[offset..offset + 4].to_vec()));
+        offset += mem::size_of::<u32>();
+
+        (OutPoint { hash, index }, offset)
+    }
+}
+
+impl TXOut {
+    pub fn from_bytes(bytes: Vec<u8>) -> (TXOut, usize) {
+        let mut offset: usize = 0;
+        let value: i64 =
+            i64::from_le_bytes(byte_array_from_vec(bytes[offset..offset + 8].to_vec()));
+        offset += mem::size_of::<i64>();
+
+        let pk_script_length: VarInt = VarInt::from_bytes(bytes[offset..].to_vec());
+        offset += pk_script_length.offset;
+
+        let pk_script: Vec<u8> = bytes[offset..offset + pk_script_length.as_usize()].to_vec();
+        offset += pk_script_length.as_usize();
+
+        (
+            TXOut {
+                value,
+                pk_script_length,
+                pk_script,
+            },
+            offset,
+        )
+    }
+}
+
+impl TXWitness {
+    pub fn from_bytes(bytes: Vec<u8>) -> (TXWitness, usize) {
+        let mut offset: usize = 0;
+        let count = VarInt::from_bytes(bytes[offset..].to_vec());
+        offset += count.offset;
+
+        let mut data: Vec<WitnessData> = Vec::new();
+        for _ in 0..count.as_usize() {
+            let (witness_data, size) = WitnessData::from_bytes(bytes[offset..].to_vec());
+            offset += size;
+        }
+
+        (TXWitness { count, data }, offset)
+    }
+}
+
+impl WitnessData {
+    pub fn from_bytes(bytes: Vec<u8>) -> (WitnessData, usize) {
+        let mut offset: usize = 0;
+        let length: VarInt = VarInt::from_bytes(bytes[offset..].to_vec());
+        offset += length.offset;
+
+        let data: Vec<u8> = bytes[offset..offset + length.as_usize()].to_vec();
+
+        (WitnessData { length, data }, offset)
+    }
+}
